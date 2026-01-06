@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset="utf-8"/>
+<meta name=viewport content="width=device-width,initial-scale=1"/>
+<title>Identity System â€” 3D Orrery</title>
+<style>html,body{height:100%;margin:0;background:#050712;color:#e9eefc;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;overflow:hidden}#c{position:fixed;inset:0;display:block}.hud{position:fixed;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;gap:12px;pointer-events:none;z-index:10}.card{pointer-events:auto;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:12px 14px;backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.28);max-width:min(620px,92vw)}.title{letter-spacing:.16em;text-transform:uppercase;font-size:13px;margin:0 0 6px}.sub{margin:0;color:rgba(233,238,252,.75);font-size:13px;line-height:1.35}.btnRow{pointer-events:auto;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}.btn{border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.28);color:rgba(233,238,252,.92);padding:10px 12px;border-radius:999px;cursor:pointer;backdrop-filter:blur(10px);user-select:none;transition:transform .15s ease,background .15s ease}.btn:hover{transform:translateY(-1px);background:rgba(255,255,255,.06)}.hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:10px 12px;color:rgba(233,238,252,.8);font-size:12px;letter-spacing:.12em;text-transform:uppercase;backdrop-filter:blur(10px);pointer-events:none;z-index:10}.overlay{position:fixed;inset:0;display:none;place-items:center;background:rgba(0,0,0,.58);backdrop-filter:blur(10px);padding:18px;z-index:20}.overlay.show{display:grid}.modal{width:min(900px,94vw);max-height:min(82vh,740px);overflow:auto;background:rgba(10,14,35,.82);border:1px solid rgba(255,255,255,.14);border-radius:18px;box-shadow:0 18px 60px rgba(0,0,0,.55);padding:16px}.mhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-bottom:1px solid rgba(255,255,255,.10);padding-bottom:10px}.mname{margin:0;letter-spacing:.10em;text-transform:uppercase;font-size:16px}.mmeta{margin:6px 0 0;color:rgba(233,238,252,.72);font-size:13px;line-height:1.4}.close{border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.28);color:rgba(233,238,252,.92);border-radius:999px;padding:10px 12px;cursor:pointer}.section{margin:14px 0 0;padding:14px;border:1px solid rgba(255,255,255,.10);border-radius:14px;background:rgba(0,0,0,.16)}.section h3{margin:0 0 10px;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:rgba(233,238,252,.9)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}@media(max-width:720px){.grid{grid-template-columns:1fr}}.imgCard{border:1px solid rgba(255,255,255,.10);border-radius:14px;overflow:hidden;background:rgba(0,0,0,.18)}.imgCard img{width:100%;height:220px;object-fit:cover;display:block}.cap{padding:10px 12px}.cap b{display:block;margin-bottom:6px}.cap p{margin:0;color:rgba(233,238,252,.78);line-height:1.45;font-size:13px}.reflection{margin-top:12px;color:rgba(233,238,252,.82);font-style:italic;line-height:1.55}.loading{position:fixed;inset:0;display:grid;place-items:center;z-index:15;background:radial-gradient(1200px 800px at 55% 35%,rgba(110,140,255,.12),transparent 60%),linear-gradient(180deg,#030411,#050712 45%,#02020a);color:rgba(233,238,252,.86);letter-spacing:.12em;text-transform:uppercase;font-size:12px}.loading .box{padding:14px 16px;border-radius:16px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(10px);box-shadow:0 10px 30px rgba(0,0,0,.28)}</style>
+</head>
+<body>
+<canvas id=c></canvas>
+<div class=hud>
+<div class=card>
+<p class=title>Identity System</p>
+<p class=sub>Drag to rotate â€¢ Scroll / pinch to zoom â€¢ Click a planet to open your gallery (orbits slowed 25Ã—)</p>
+</div>
+<div class=btnRow>
+<button class=btn id=btnReset>Reset view</button>
+<button class=btn id=btnPause>Pause</button>
+</div>
+</div>
+<div class=hint>Click a planet</div>
+<div class=overlay id=overlay role=dialog aria-modal=true>
+<div class=modal>
+<div class=mhead>
+<div>
+<h2 class=mname id=mname>Planet</h2>
+<div class=mmeta id=mmeta>Symbolism</div>
+</div>
+<button class=close id=close>Close</button>
+</div>
+<div id=mbody></div>
+</div>
+</div>
+<div class=loading id=loading>
+<div class=box>Loading 3D modelâ€¦</div>
+</div>
+<script type=module>
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+    import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
+
+    // ======= Put this GLB in the SAME folder as index.html =======
+    const GLB_URL = "./solar_system_model_orrery.glb";
+
+    // ======= Slowdown (25Ã— slower) =======
+    const TIME_SCALE = 1 / 25;
+
+    // ======= Your planet content =======
+    // Replace image src with your own, e.g. "images/fish.jpg"
+    const PLANET_DATA = {
+      mercury: {
+        name: "Mercury",
+        meta: "Mind & Communication â€¢ Innovative Projects",
+        gallery: [
+          { title: "Senior Kiosk", desc: "Leadership through clear communication and follow-through.", src: "https://images.unsplash.com/photo-1526378722484-bd91ca387e72?auto=format&fit=crop&w=1400&q=70" },
+          { title: "Data Analysis Coding", desc: "Using code to test ideas and find patterns.", src: "https://images.unsplash.com/photo-1555949963-aa79dcee981c?auto=format&fit=crop&w=1400&q=70" }
+        ],
+        reflection: "Understanding the world begins with understanding how I think."
+      },
+      venus: {
+        name: "Venus",
+        meta: "Love & Appreciation â€¢ Arts",
+        gallery: [
+          { title: "Painting: Fish", desc: "A study in movement and color.", src: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=1400&q=70" },
+          { title: "Painting: Times Square", desc: "Energy, saturation, and observation.", src: "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1400&q=70" }
+        ],
+        reflection: "Art teaches me to notice what most people overlook."
+      },
+      mars: {
+        name: "Mars",
+        meta: "Competition â€¢ Growth",
+        gallery: [
+          { title: "YTN Debate", desc: "Seed: where I learned to structure arguments.", src: "https://images.unsplash.com/photo-1523580846011-d3a5bc25702b?auto=format&fit=crop&w=1400&q=70" },
+          { title: "WSC Debate / MUN", desc: "Sprouting to flexing: pressure shaped confidence.", src: "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&w=1400&q=70" }
+        ],
+        reflection: "Competition is how I measure growth, not worth."
+      },
+      earth: {
+        name: "Earth",
+        meta: "Nurture â€¢ Family, Friends, Community",
+        gallery: [
+          { title: "Letters from Mom", desc: "Values and perspective I return to.", src: "https://images.unsplash.com/photo-1528747045269-390fe33c19f2?auto=format&fit=crop&w=1400&q=70" },
+          { title: "Friends", desc: "Belonging that keeps me grounded.", src: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1400&q=70" }
+        ],
+        reflection: "I grow faster when Iâ€™m grounded in people who keep me honest."
+      },
+      jupiter: { name:"Jupiter", meta:"Growth & Wisdom", gallery:[], reflection:"" },
+      saturn:  { name:"Saturn",  meta:"Discipline & Structure", gallery:[], reflection:"" },
+      uranus:  { name:"Uranus",  meta:"Innovation & Change", gallery:[], reflection:"" },
+      neptune: { name:"Neptune", meta:"Intuition", gallery:[], reflection:"" },
+      pluto:   { name:"Pluto",   meta:"Transformation", gallery:[], reflection:"" }
+    };
+
+    // ======= Helpers: map mesh names to keys =======
+    // If your GLB uses names like "Mercury", "venus", "MARS", etc., this will match them.
+    function normalizeKey(name){
+      const n = (name || "").toLowerCase().replace(/[^a-z]/g,"");
+      const keys = ["mercury","venus","earth","mars","jupiter","saturn","uranus","neptune","pluto","sun"];
+      for (const k of keys){
+        if (n.includes(k)) return k;
+      }
+      return null;
+    }
+
+    // ======= Three.js setup =======
+    const canvas = document.getElementById("c");
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x050712);
+    scene.fog = new THREE.Fog(0x050712, 25, 160);
+
+    const camera = new THREE.PerspectiveCamera(55, 2, 0.1, 400);
+    camera.position.set(0, 12, 30);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enableRotate = true;
+    controls.enableZoom = true;
+    controls.zoomSpeed = 0.9;
+    controls.enablePan = false;
+    controls.minDistance = 6;
+    controls.maxDistance = 90;
+    controls.target.set(0, 0, 0);
+    controls.update();
+
+    // Lights (tuned for GLB)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+
+    const key = new THREE.DirectionalLight(0xffffff, 1.0);
+    key.position.set(14, 18, 10);
+    scene.add(key);
+
+    const rim = new THREE.DirectionalLight(0x9fb3ff, 0.45);
+    rim.position.set(-18, 10, -12);
+    scene.add(rim);
+
+    // Simple starfield
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 2200;
+    const starPos = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const r = 220 * Math.random();
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      starPos[i*3+0] = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i*3+1] = (r * Math.cos(phi)) * 0.35;
+      starPos[i*3+2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+    const stars = new THREE.Points(
+      starGeo,
+      new THREE.PointsMaterial({ size: 0.22, color: 0xffffff, transparent:true, opacity:0.55 })
+    );
+    scene.add(stars);
+
+    // ======= Load GLB =======
+    const loader = new GLTFLoader();
+    const loadingEl = document.getElementById("loading");
+
+    let modelRoot = null;
+    const clickable = []; // planet meshes
+    const originalEmissive = new Map(); // for hover highlight
+
+    loader.load(
+      GLB_URL,
+      (gltf) => {
+        modelRoot = gltf.scene;
+
+        // Auto-center and scale nicely
+        const box = new THREE.Box3().setFromObject(modelRoot);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        modelRoot.position.sub(center); // move center to origin
+
+        // Scale so it fits view
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const targetMax = 26; // desired size in scene units
+        const scale = maxDim > 0 ? (targetMax / maxDim) : 1;
+        modelRoot.scale.setScalar(scale);
+
+        // Improve materials a bit + collect clickable planet meshes
+        modelRoot.traverse((obj) => {
+          if (!obj.isMesh) return;
+
+          obj.castShadow = false;
+          obj.receiveShadow = false;
+
+          const k = normalizeKey(obj.name);
+          if (k && k !== "sun") {
+            // treat as planet piece
+            clickable.push(obj);
+            obj.userData.planetKey = k;
+
+            // Ensure material has emissive for highlight
+            const mat = obj.material;
+            if (mat && "emissive" in mat) {
+              originalEmissive.set(obj.uuid, mat.emissive.clone());
+            }
+          }
+
+          // Make materials slightly richer (safe defaults)
+          if (obj.material) {
+            const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+            for (const m of mats) {
+              if ("roughness" in m) m.roughness = Math.min(0.85, Math.max(0.25, m.roughness ?? 0.6));
+              if ("metalness" in m) m.metalness = Math.min(0.25, Math.max(0.0, m.metalness ?? 0.05));
+              m.needsUpdate = true;
+            }
+          }
+        });
+
+        scene.add(modelRoot);
+        loadingEl.style.display = "none";
+      },
+      undefined,
+      (err) => {
+        console.error("Failed to load GLB:", err);
+        loadingEl.querySelector(".box").textContent = "Failed to load 3D model. Check file name/path.";
+      }
+    );
+
+    // ======= Modal =======
+    const overlay = document.getElementById("overlay");
+    const closeBtn = document.getElementById("close");
+    const mname = document.getElementById("mname");
+    const mmeta = document.getElementById("mmeta");
+    const mbody = document.getElementById("mbody");
+
+    function openModal(key){
+      const d = PLANET_DATA[key];
+      if(!d){
+        mname.textContent = key.toUpperCase();
+        mmeta.textContent = "Add this planetâ€™s content in PLANET_DATA.";
+        mbody.innerHTML = "";
+        overlay.classList.add("show");
+        return;
+      }
+      mname.textContent = d.name;
+      mmeta.textContent = d.meta;
+
+      const gallery = (d.gallery || []);
+      const galleryHTML = gallery.length
+        ? gallery.map(g => `
+            <div class="imgCard">
+              <img src="${g.src}" alt="${g.title}">
+              <div class="cap">
+                <b>${g.title}</b>
+                <p>${g.desc}</p>
+              </div>
+            </div>
+          `).join("")
+        : `<div style="color:rgba(233,238,252,.75);font-size:13px;line-height:1.5">
+             Add images for this planet in <b>PLANET_DATA</b>.
+           </div>`;
+
+      mbody.innerHTML = `
+        <div class="section">
+          <h3>Gallery</h3>
+          <div class="grid">${galleryHTML}</div>
+        </div>
+        ${d.reflection ? `<div class="reflection">${d.reflection}</div>` : ``}
+      `;
+      overlay.classList.add("show");
+    }
+
+    function closeModal(){ overlay.classList.remove("show"); }
+    closeBtn.addEventListener("click", closeModal);
+    overlay.addEventListener("click", (e)=>{ if(e.target === overlay) closeModal(); });
+    window.addEventListener("keydown", (e)=>{ if(e.key === "Escape") closeModal(); });
+
+    // ======= Click + hover picking =======
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let hovered = null;
+
+    function setHover(mesh){
+      if (hovered && hovered !== mesh) {
+        // restore emissive
+        const mat = hovered.material;
+        if (mat && "emissive" in mat && originalEmissive.has(hovered.uuid)) {
+          mat.emissive.copy(originalEmissive.get(hovered.uuid));
+          mat.emissiveIntensity = 1.0;
+        }
+      }
+      hovered = mesh;
+
+      if (hovered) {
+        const mat = hovered.material;
+        if (mat && "emissive" in mat) {
+          mat.emissive.setHex(0x7aa3ff);
+          mat.emissiveIntensity = 1.15;
+        }
+      }
+    }
+
+    function pointerToNDC(e){
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    }
+
+    renderer.domElement.addEventListener("pointermove", (e) => {
+      if (!clickable.length) return;
+      pointerToNDC(e);
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(clickable, true);
+      if (hits.length) setHover(hits[0].object);
+      else setHover(null);
+    });
+
+    renderer.domElement.addEventListener("pointerdown", (e) => {
+      if (!clickable.length) return;
+      pointerToNDC(e);
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObjects(clickable, true);
+      if (!hits.length) return;
+
+      const mesh = hits[0].object;
+      const key = mesh.userData.planetKey;
+      if (key) openModal(key);
+    });
+
+    // ======= Buttons =======
+    let paused = false;
+    document.getElementById("btnPause").addEventListener("click", (e)=>{
+      paused = !paused;
+      e.currentTarget.textContent = paused ? "Resume" : "Pause";
+    });
+
+    document.getElementById("btnReset").addEventListener("click", ()=>{
+      controls.reset();
+      camera.position.set(0, 12, 30);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    });
+
+    // ======= Resize =======
+    function resize(){
+      const w = window.innerWidth, h = window.innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    // ======= Animate =======
+    const clock = new THREE.Clock();
+    function tick(){
+      const t = clock.getElapsedTime() * TIME_SCALE;
+
+      if (!paused) {
+        // If your GLB already animates orbits internally, we just rotate the whole system a tiny bit
+        // to keep it feeling alive. If you DON'T want this, set the multiplier to 0.
+        if (modelRoot) modelRoot.rotation.y = t * 0.08;
+
+        // subtle star drift
+        stars.rotation.y = t * 0.02;
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    }
+    tick();
+  </script>
+</body>
+</html>
